@@ -4,6 +4,7 @@ from torch.nn import Module, GRU, Linear, Sigmoid
 class Generator(Module):
     def __init__(self, input_size, output_size, num_layers):
         """Noise sequence -> Original space"""
+        super().__init__()
         self.rnn = GRU(input_size=input_size, 
                        hidden_size=output_size, 
                        num_layers=num_layers, 
@@ -21,6 +22,7 @@ class Generator(Module):
 class Discriminator(Module):
     """Original space -> logits"""
     def __init__(self, hidden_size, num_layers):
+        super().__init__()
         self.rnn = GRU(input_size=hidden_size, 
                        hidden_size=hidden_size, 
                        num_layers=num_layers, 
@@ -36,6 +38,7 @@ class Discriminator(Module):
 class Embedder(Module):
     """Original space -> Embedding space"""
     def __init__(self, input_size, hidden_size, num_layers):
+        super().__init__()
         self.rnn = GRU(input_size=input_size, 
                        hidden_size=hidden_size, 
                        num_layers=num_layers, 
@@ -53,6 +56,7 @@ class Embedder(Module):
 class Recovery(Module):
     def __init__(self, hidden_size, output_size, num_layers):
         """Latent space -> Original space"""
+        super().__init__()
         self.rnn = GRU(input_size=hidden_size, 
                 hidden_size=hidden_size, 
                 num_layers=num_layers, 
@@ -68,6 +72,7 @@ class Recovery(Module):
 class Supervisor(Module):
     def __init__(self, input_size, num_layers):
         """Predicts next point"""
+        super().__init__()
         self.rnn = GRU(input_size=input_size, 
                        hidden_size=input_size, 
                        num_layers=num_layers, 
@@ -84,6 +89,7 @@ class Supervisor(Module):
 
 class TimeGAN(Module):
     def __init__(self, config):
+        super().__init__()
         self.generator = Generator(config["Z_size"], config["hidden_size"], config["num_layers"])
         self.discriminator = Discriminator(config["hidden_size"], config["num_layers"])
         self.embedder = Embedder(config["feature_size"], config["hidden_size"], config["num_layers"])
