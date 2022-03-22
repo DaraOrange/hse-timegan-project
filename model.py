@@ -58,7 +58,21 @@ class Discriminator(Module):
 
     def forward(self, x):
         # [B x T x F] -> [B x T x 1]
-        pass
+        H_packed = torch.nn.utils.rnn.pack_padded_sequence(
+            input=x, 
+            lengths=T, 
+            batch_first=True, 
+            enforce_sorted=False
+        )
+        
+        H_o, _ = self.rnn(H_packed)
+        H_o, _ = torch.nn.utils.rnn.pad_packed_sequence(
+            sequence=H_o, 
+            batch_first=True,
+        )
+
+        logits = self.linear(H_o).squeeze(-1)
+        return logits
 
 class Embedder(Module):
     """Original space -> Embedding space"""
@@ -71,9 +85,25 @@ class Embedder(Module):
         self.linear = Linear(in_features=hidden_dim, out_features=hidden_dim)
         self.sigmoid = Sigmoid()
 
-    def forward(self, x):
-        # [B x T x F] -> [B x T x H]
-        pass
+    def forward(self, x, T):
+        X_packed = torch.nn.utils.rnn.pack_padded_sequence(
+            input=x, 
+            lengths=T, 
+            batch_first=True, 
+            enforce_sorted=False
+        )
+        
+        H_o, _ = self.rnn(X_packed)
+        H_o, T = torch.nn.utils.rnn.pad_packed_sequence(
+            sequence=H_o, 
+            batch_first=True,
+        )
+        
+        logits = self.linear(H_o)
+        H = self.sigmoid(logits)
+        return H
+
+
 class Recovery(Module):
     def __init__(self, hidden_dim, output_size, num_layers):
         """Latent space -> Original space"""
@@ -84,9 +114,23 @@ class Recovery(Module):
                 batch_first=True)
         self.linear = Linear(in_features=hidden_dim, out_features=output_size)
 
-    def forward(self, x):
-        # [B x T x E] -> [B x T x F]
-        pass
+    def forward(self, x, T):
+        H_packed = torch.nn.utils.rnn.pack_padded_sequence(
+            input=x, 
+            lengths=T, 
+            batch_first=True, 
+            enforce_sorted=False
+        )
+        
+        H_o, _ = self.rnn(H_packed)
+        H_o, _ = torch.nn.utils.rnn.pad_packed_sequence(
+            sequence=H_o, 
+            batch_first=True
+        )
+
+        X_tilde = self.linear(H_o)
+        return X_tilde
+
 
 class Supervisor(Module):
     def __init__(self, input_size, num_layers):
@@ -99,6 +143,20 @@ class Supervisor(Module):
         self.linear = Linear(in_features=input_size, out_features=input_size)
         self.sigmoid = Sigmoid()
 
-    def forward(self, x):
-        # [B x T x E] -> [B x T x E]
-        pass
+    def forward(self, x, T):
+        H_packed = torch.nn.utils.rnn.pack_padded_sequence(
+            input=x, 
+            lengths=T, 
+            batch_first=True, 
+            enforce_sorted=False
+        )
+        
+        H_o, _ = self.rnn(H_packed)
+        H_o, _ = torch.nn.utils.rnn.pad_packed_sequence(
+            sequence=H_o, 
+            batch_first=True,
+        )
+
+        logits = self.linear(H_o)
+        H_hat = self.sigmoid(logits)
+        return H_hat
