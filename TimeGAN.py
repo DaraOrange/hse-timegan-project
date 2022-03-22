@@ -155,7 +155,7 @@ class TimeGAN(Module):
         return loss
 
     def train_embedder(self, dataloader, n_epochs):
-        for epoch in n_epochs:
+        for epoch in range(n_epochs):
             mean_loss = 0
             for x in dataloader:
                 self.embedder.zero_grad()
@@ -168,7 +168,7 @@ class TimeGAN(Module):
             print(f'Epoch: {epoch}, embedder loss: {mean_loss/len(dataloader)}')
 
     def train_supervisor(self, dataloader, n_epochs):
-        for epoch in n_epochs:
+        for epoch in range(n_epochs):
             mean_loss = 0
             for x in dataloader:
                 self.supervisor.zero_grad()
@@ -179,7 +179,7 @@ class TimeGAN(Module):
             print(f'Epoch: {epoch}, supervisor loss: {mean_loss/len(dataloader)}')
 
     def train_gan(self, dataloader, n_epochs):
-        for epoch in n_epochs:
+        for epoch in range(n_epochs):
             mean_g_loss = 0
             mean_d_loss = 0
             mean_e_loss = 0
