@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from model import Embedder
+from model import Embedder, Generator, Discriminator, Recovery, Supervisor
 
 
 def MinMaxScaler(dataX):
@@ -46,103 +46,179 @@ def train(dataX, parameters):
     gamma        = 1
     lr 			 = parameters['lr']
 
-    # input place holders  # https://discuss.pytorch.org/t/placeholder-in-pytorch/96614
-
-    # X = tf.placeholder(tf.float32, [None, Max_Seq_Len, data_dim], name = "myinput_x")
-    # Z = tf.placeholder(tf.float32, [None, Max_Seq_Len, z_dim], name = "myinput_z")
-    # T = tf.placeholder(tf.int32, [None], name = "myinput_t")
-
-    # functions declaration -> classes in model.py
-
-    #%% Random vector generation
-    def random_generator (batch_size, z_dim, T_mb, Max_Seq_Len):
-
+    def random_generator(batch_size, z_dim, T_mb, Max_Seq_Len):
         Z_mb = list()
-
         for i in range(batch_size):
-
             Temp = np.zeros([Max_Seq_Len, z_dim])
-
             Temp_Z = np.random.uniform(0., 1, [T_mb[i], z_dim])
-
             Temp[:T_mb[i],:] = Temp_Z
-
             Z_mb.append(Temp_Z)
-
         return Z_mb
 
-    # G_loss_U, G_loss_S, G_loss_V
+    embedder = Embedder(data_dim, hidden_dim, num_layers).cuda()
+    discriminator = Discriminator(hidden_dim, num_layers).cuda()
+    generator = Generator(z_dim, hidden_dim, num_layers).cuda()
+    recovery = Recovery(hidden_dim, data_dim, num_layers).cuda()
+    supervisor = Supervisor(data_dim, num_layers)
 
-    # Loss for the generator
-    # 1. Adversarial loss
-    G_loss_U = (
-        lambda Y_fake:
-        torch.nn.functional.binary_cross_entropy_with_logits(
-            Y_fake,
-            torch.ones_like(Y_fake)
-        )
-    )
-    # G_loss_U_e = lambda Y_fake_e: torch.nn.functional.binary_cross_entropy_with_logits(Y_fake_e, torch.ones_like(Y_fake_e))
-
-    # 2. Supervised loss
-    G_loss_S = (
-        lambda H_hat_supervise, H:
-        torch.nn.functional.mse_loss(H_hat_supervise[:,:-1,:], H[:,1:,:])
-    )
-
-    # 3. Two Momments
-    G_loss_V1 = (
-        lambda X_hat, X:
-        torch.mean(torch.abs(
-            torch.sqrt(X_hat.var(dim=0, unbiased=False) + 1e-6) -
-            torch.sqrt(X.var(dim=0, unbiased=False) + 1e-6)
-        ))
-    )
-    #tf.reduce_mean(np.abs(tf.sqrt(tf.nn.moments(X_hat,[0])[1] + 1e-6) - tf.sqrt(tf.nn.moments(X,[0])[1] + 1e-6)))
-    G_loss_V2 = torch.mean(torch.abs((X_hat.mean(dim=0)) - (X.mean(dim=0))))
-    #tf.reduce_mean(np.abs((tf.nn.moments(X_hat,[0])[0]) - (tf.nn.moments(X,[0])[0])))
-
-    # Loss for the embedder network
-    E_loss_T0 = torch.nn.functional.mse_loss
-    E_loss0 = lambda X, X_tilde: 10 * torch.sqrt(E_loss_T0(X, X_tilde))
-    E_loss = lambda X, X_tilde: E_loss0(X, X_tilde) + 0.1*G_loss_S()
-
-    embedder = Embedder(..., hidden_dim, num_layers)
-    embedder.to(parameters['device'])
-
-    E0_opt = torch.optim.Adam(embedder.parameters(), lr=lr)
-    E_opt = torch.optim.Adam(recovery.parameters(), lr=lr)
-    D_opt = torch.optim.Adam(discriminator.parameters(), lr=lr)
-    G_opt = torch.optim.Adam(generator.parameters(), lr=lr)
-    GS_opt = torch.optim.Adam(supervisor.parameters(), lr=lr)
-
-    for it in range(iterations):
-    	# Batch setting
+    e_opt = torch.optim.Adam(embedder.parameters(), lr)
+    r_opt = torch.optim.Adam(recovery.parameters(), lr)
+    s_opt = torch.optim.Adam(supervisor.parameters(), lr)
+    g_opt = torch.optim.Adam(generator.parameters(), lr)
+    d_opt = torch.optim.Adam(discriminator.parameters(), lr)
+    
+    #%% Embedding Learning
+    
+    print('Start Embedding Network Training')
+    
+    for itt in range(iterations):
+        e_opt.zero_grad()
+        r_opt.zero_grad()
+        s_opt.zero_grad()
+        g_opt.zero_grad()
+        d_opt.zero_grad()
+        
+        # Batch setting
         idx = np.random.permutation(No)
-        train_idx = idx[:batch_size]
+        train_idx = idx[:batch_size]     
+            
+        X = list(dataX[i] for i in train_idx)
+        T = list(dataT[i] for i in train_idx)
 
-        X_mb = list(dataX[i] for i in train_idx)
-        T_mb = list(dataT[i] for i in train_idx)
+        H = embedder(X, T)
+        X_tilde = recovery(H, T)
+        
+        # Generator
+        H_hat_supervise = supervisor(H, T)
+            
+        # Train embedder    
+        G_loss_S = torch.nn.MSELoss()(H[:,1:,:], H_hat_supervise[:,1:,:])
+        E_loss_T0 = torch.nn.MSELoss()(X, X_tilde)
+        E_loss0 = 10*torch.sqrt(E_loss_T0)
+        E_loss = E_loss0  + 0.1*G_loss_S
 
-        step_g_loss_s = E_loss(X_mb, T_mb)
-        step_g_loss_s.backward()
-        E0_opt.step()
+        E_loss0.backward()
 
-   	for it in range(iterations):
+        # Update model parameters
+        e_opt.step()
+        r_opt.step()
+        
+        if itt % 1000 == 0:
+            print('step: '+ str(itt) + ', e_loss: ' + str(np.round(np.sqrt(E_loss_T0),4)) )        
+            
+    print('Finish Embedding Network Training')
+    
+    print('Start Training with Supervised Loss Only')
+    
+    for itt in range(iterations):
+        e_opt.zero_grad()
+        r_opt.zero_grad()
+        s_opt.zero_grad()
+        g_opt.zero_grad()
+        d_opt.zero_grad()
+        
+        idx = np.random.permutation(No)
+        train_idx = idx[:batch_size]     
+            
+        X = list(dataX[i] for i in train_idx)
+        T = list(dataT[i] for i in train_idx)        
+        
+        H = embedder(X, T)     
+        G_loss_S = torch.nn.MSELoss()(H[:,1:,:], H_hat_supervise[:,1:,:])
+        G_loss_S.backward()
+        s_opt.step()
+                           
+        if itt % 1000 == 0:
+            print('step: '+ str(itt) + ', s_loss: ' + str(np.round(np.sqrt(G_loss_S),4)) )
+                
+    print('Finish Training with Supervised Loss Only')
+    
+    print('Start Joint Training')
+    
+    # Training step
+    for itt in range(iterations):
+
+        idx = np.random.permutation(No)
+        train_idx = idx[:batch_size]     
+            
+        X = list(dataX[i] for i in train_idx)
+        T = list(dataT[i] for i in train_idx)   
 
         # Generator Training
-        for kk in range(2):
+        for _ in range(2):
+            e_opt.zero_grad()
+            r_opt.zero_grad()
+            s_opt.zero_grad()
+            g_opt.zero_grad()
+            d_opt.zero_grad()
 
-            # Batch setting
-            idx = np.random.permutation(No)
-            train_idx = idx[:batch_size]
+            H = embedder(X, T)
+            H_hat_supervise = supervisor(H, T)
+            X_tilde = recovery(H, T)
 
-            X_mb = list(dataX[i] for i in train_idx)
-            T_mb = list(dataT[i] for i in train_idx)
+            E_hat = generator(Z, T)
+            H_hat = supervisor(E_hat, T)
 
-            # Random vector generation
-            Z_mb = random_generator(batch_size, z_dim, T_mb, Max_Seq_Len
+            X_hat = recovery(H_hat, T)
+
+            Y_fake = discriminator(H_hat, T)        # Output of supervisor
+            Y_fake_e = discriminator(E_hat, T)      # Output of generator
+
+            G_loss_U = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake, torch.ones_like(Y_fake))
+            G_loss_U_e = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake_e, torch.ones_like(Y_fake_e))
+
+            G_loss_S = torch.nn.functional.mse_loss(H_hat_supervise[:,:-1,:], H[:,1:,:])        # Teacher forcing next output
+
+            G_loss_V1 = torch.mean(torch.abs(torch.sqrt(X_hat.var(dim=0, unbiased=False) + 1e-6) - torch.sqrt(X.var(dim=0, unbiased=False) + 1e-6)))
+            G_loss_V2 = torch.mean(torch.abs((X_hat.mean(dim=0)) - (X.mean(dim=0))))
+
+            G_loss_V = G_loss_V1 + G_loss_V2
+
+            G_loss = G_loss_U + gamma * G_loss_U_e + 100 * torch.sqrt(G_loss_S) + 100 * G_loss_V
+
+            G_loss.backward()
+            g_opt.step()
+            s_opt.step()
 
 
-            G_loss_U, G_loss_S, G_loss_V
-           	G_opt.step()
+            H = embedder(X, T)
+            X_tilde = recovery(H, T)
+
+            H_hat_supervise = supervisor(H, T)
+            G_loss_S = torch.nn.functional.mse_loss(
+                H_hat_supervise[:,:-1,:], 
+                H[:,1:,:]
+            ) # Teacher forcing next output
+
+            E_loss_T0 = torch.nn.functional.mse_loss(X_tilde, X)
+            E_loss0 = 10 * torch.sqrt(E_loss_T0)
+            E_loss = E_loss0 + 0.1 * G_loss_S
+
+            E_loss.backward()
+            e_opt.step()
+            r_opt.step()
+
+
+        # Random Generator
+        Z = torch.rand((batch_size, Max_Seq_Len, z_dim))
+
+        H = embedder(X, T).detach()
+        H_hat = supervisor(H, T).detach()
+        E_hat = generator(Z, T).detach()
+
+        # Forward Pass
+        Y_real = discriminator(H, T)            # Encoded original data
+        Y_fake = discriminator(H_hat, T)        # Output of supervisor
+        Y_fake_e = discriminator(E_hat, T)      # Output of generator
+
+        D_loss_real = torch.nn.functional.binary_cross_entropy_with_logits(Y_real, torch.ones_like(Y_real))
+        D_loss_fake = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake, torch.zeros_like(Y_fake))
+        D_loss_fake_e = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake_e, torch.zeros_like(Y_fake_e))
+
+        D_loss = D_loss_real + D_loss_fake + gamma * D_loss_fake_e
+        
+        D_loss.backward()
+        d_opt.step()
+   
+    
+    print('Finish Joint Training')
