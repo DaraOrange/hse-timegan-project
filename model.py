@@ -8,7 +8,7 @@ class Generator(Module):
         # tgan.py:129
         self.e_cell = GRU(
             input_size=z_dim, 
-            hidden_dim=hidden_dim, 
+            hidden_size=hidden_dim, 
             num_layers=num_layers, 
             batch_first=True
         )
@@ -47,7 +47,7 @@ class Discriminator(Module):
         super().__init__()
         self.e_cell = GRU(
             input_size=hidden_dim, 
-            hidden_dim=hidden_dim, 
+            hidden_size=hidden_dim, 
             num_layers=num_layers, 
             batch_first=True
         )
@@ -79,7 +79,7 @@ class Embedder(Module):
     def __init__(self, input_size, hidden_dim, num_layers):
         super().__init__()
         self.rnn = GRU(input_size=input_size, 
-                       hidden_dim=hidden_dim, 
+                       hidden_size=hidden_dim, 
                        num_layers=num_layers, 
                        batch_first=True)
         self.linear = Linear(in_features=hidden_dim, out_features=hidden_dim)
@@ -109,7 +109,7 @@ class Recovery(Module):
         """Latent space -> Original space"""
         super().__init__()
         self.rnn = GRU(input_size=hidden_dim, 
-                hidden_dim=hidden_dim, 
+                hidden_size=hidden_dim, 
                 num_layers=num_layers, 
                 batch_first=True)
         self.linear = Linear(in_features=hidden_dim, out_features=output_size)
@@ -137,7 +137,7 @@ class Supervisor(Module):
         """Predicts next point"""
         super().__init__()
         self.rnn = GRU(input_size=input_size, 
-                       hidden_dim=input_size, 
+                       hidden_size=input_size, 
                        num_layers=num_layers, 
                        batch_first=True)
         self.linear = Linear(in_features=input_size, out_features=input_size)
