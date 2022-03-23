@@ -1,22 +1,11 @@
 import numpy as np
 import torch
 from model import Embedder, Generator, Discriminator, Recovery, Supervisor
-from data_loading import real_data_loading, sine_data_generation
+from data_loading import real_data_loading, sine_data_generation, scaler
 #from metrics.discriminative_metrics import discriminative_score_metrics
 #from metrics.predictive_metrics import predictive_score_metrics
 #from metrics.visualization_metrics import visualization
 import argparse
-
-
-def MinMaxScaler(dataX):
-
-    min_val = np.min(np.min(dataX, axis = 0), axis = 0)
-    dataX = dataX - min_val
-
-    max_val = np.max(np.max(dataX, axis = 0), axis = 0)
-    dataX = dataX / (max_val + 1e-7)
-
-    return dataX, min_val, max_val
 
 
 #%% Start TGAN function (Input: Original data, Output: Synthetic Data)
@@ -35,8 +24,10 @@ def train(dataX, parameters):
         dataT.append(len(dataX[i][:,0]))
 
     # Normalization
-    if ((np.max(dataX) > 1) | (np.min(dataX) < 0)):
-        dataX, min_val, max_val = MinMaxScaler(dataX)
+    min_val = np.min(np.min(dataX, axis = 0), axis = 0)
+    max_val = np.max(np.max(dataX, axis = 0), axis = 0)
+    if ((max_val > 1) | (min_val < 0)):
+        dataX = scale(dataX)
         Normalization_Flag = 1
     else:
         Normalization_Flag = 0
@@ -70,32 +61,32 @@ def train(dataX, parameters):
     s_opt = torch.optim.Adam(supervisor.parameters(), lr)
     g_opt = torch.optim.Adam(generator.parameters(), lr)
     d_opt = torch.optim.Adam(discriminator.parameters(), lr)
-    
+
     #%% Embedding Learning
-    
+
     print('Start Embedding Network Training')
-    
+
     for itt in range(iterations):
         e_opt.zero_grad()
         r_opt.zero_grad()
         s_opt.zero_grad()
         g_opt.zero_grad()
         d_opt.zero_grad()
-        
+
         # Batch setting
         idx = np.random.permutation(No)
-        train_idx = idx[:batch_size]     
-            
+        train_idx = idx[:batch_size]
+
         X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
         T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
 
         H = embedder(X, T)
         X_tilde = recovery(H, T)
-        
+
         # Generator
         H_hat_supervise = supervisor(H, T)
-            
-        # Train embedder    
+
+        # Train embedder
         G_loss_S = torch.nn.MSELoss()(H[:,1:,:], H_hat_supervise[:,1:,:])
         E_loss_T0 = torch.nn.MSELoss()(X, X_tilde)
         E_loss0 = 10*torch.sqrt(E_loss_T0)
@@ -106,46 +97,46 @@ def train(dataX, parameters):
         # Update model parameters
         e_opt.step()
         r_opt.step()
-        
+
         if itt % 1000 == 0:
-            print('step: '+ str(itt) + ', e_loss: ' + str(E_loss_T0.item() ))        
-            
+            print('step: '+ str(itt) + ', e_loss: ' + str(E_loss_T0.item() ))
+
     print('Finish Embedding Network Training')
-    
+
     print('Start Training with Supervised Loss Only')
-    
+
     for itt in range(iterations):
         e_opt.zero_grad()
         r_opt.zero_grad()
         s_opt.zero_grad()
         g_opt.zero_grad()
         d_opt.zero_grad()
-        
+
         idx = np.random.permutation(No)
-        train_idx = idx[:batch_size]     
-            
+        train_idx = idx[:batch_size]
+
         X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
-        T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)    
-        
-        H = embedder(X, T)  
-        H_hat_supervise = supervisor(H, T)   
+        T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
+
+        H = embedder(X, T)
+        H_hat_supervise = supervisor(H, T)
         G_loss_S = torch.nn.MSELoss()(H[:,1:,:], H_hat_supervise[:,1:,:])
         G_loss_S.backward()
         s_opt.step()
-                           
+
         if itt % 1000 == 0:
             print('step: '+ str(itt) + ', s_loss: ' + str(np.round(np.sqrt(G_loss_S.item()),4)) )
-                
+
     print('Finish Training with Supervised Loss Only')
-    
+
     print('Start Joint Training')
-    
+
     # Training step
     for itt in range(iterations):
 
         idx = np.random.permutation(No)
-        train_idx = idx[:batch_size]     
-            
+        train_idx = idx[:batch_size]
+
         X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
         T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
 
@@ -192,7 +183,7 @@ def train(dataX, parameters):
 
             H_hat_supervise = supervisor(H, T)
             G_loss_S = torch.nn.functional.mse_loss(
-                H_hat_supervise[:,:-1,:], 
+                H_hat_supervise[:,:-1,:],
                 H[:,1:,:]
             ) # Teacher forcing next output
 
@@ -222,36 +213,36 @@ def train(dataX, parameters):
         D_loss_fake_e = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake_e, torch.zeros_like(Y_fake_e))
 
         D_loss = D_loss_real + D_loss_fake + gamma * D_loss_fake_e
-        
+
         D_loss.backward()
         d_opt.step()
 
         if itt % 1000 == 0:
-            print('step: '+ str(itt) + '/' + str(iterations) + 
-                    ', d_loss: ' + str(np.round(D_loss.item())) + 
-                    ', g_loss_u: ' + str(np.round(G_loss.item())) + 
-                    ', g_loss_s: ' + str(np.round(np.sqrt(G_loss_S.item()),4)) + 
-                    ', g_loss_v: ' + str(np.round(G_loss_V.item())) + 
+            print('step: '+ str(itt) + '/' + str(iterations) +
+                    ', d_loss: ' + str(np.round(D_loss.item())) +
+                    ', g_loss_u: ' + str(np.round(G_loss.item())) +
+                    ', g_loss_s: ' + str(np.round(np.sqrt(G_loss_S.item()),4)) +
+                    ', g_loss_v: ' + str(np.round(G_loss_V.item())) +
                     ', e_loss_t0: ' + str(np.round(np.sqrt(E_loss_T0.item()),4))  )
-   
-    
+
+
     print('Finish Joint Training')
 
     Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).cuda()
     E_hat = generator(Z, T)
     H_hat = supervisor(E_hat, T)
     generated_data_curr = recovery(H_hat, T)
-        
+
     generated_data = list()
-        
-    for i in range(No):
+
+    for i in range(batch_size):
         temp = generated_data_curr[i,:dataT[i],:]
         generated_data.append(temp)
-            
+
     # Renormalization
     generated_data = generated_data * max_val
     generated_data = generated_data + min_val
-        
+
     return generated_data
 
 
@@ -263,47 +254,47 @@ def main (args):
     # Set number of samples and its dimensions
     no, dim = 10000, 5
     ori_data = sine_data_generation(no, args.seq_len, dim)
-    
+
   print(args.data_name + ' dataset is ready.')
-    
+
   ## Synthetic data generation by TimeGAN
   # Set newtork parameters
-  parameters = dict()  
+  parameters = dict()
   parameters['module'] = args.module
   parameters['lr'] = args.lr
   parameters['hidden_size'] = args.hidden_size
   parameters['num_layers'] = args.num_layers
   parameters['iterations'] = args.iteration
   parameters['batch_size'] = args.batch_size
-      
-  generated_data = train(ori_data, parameters)   
+
+  generated_data = train(ori_data, parameters)
   print('Finish Synthetic Data Generation')
-  
-  ## Performance metrics   
+
+  ## Performance metrics
   # Output initialization
   metric_results = dict()
-  
+
   """
   # 1. Discriminative Score
   discriminative_score = list()
   for _ in range(args.metric_iteration):
     temp_disc = discriminative_score_metrics(ori_data, generated_data)
     discriminative_score.append(temp_disc)
-      
+
   metric_results['discriminative'] = np.mean(discriminative_score)
-      
+
   # 2. Predictive score
   predictive_score = list()
   for tt in range(args.metric_iteration):
     temp_pred = predictive_score_metrics(ori_data, generated_data)
-    predictive_score.append(temp_pred)   
-      
-  metric_results['predictive'] = np.mean(predictive_score)     
-          
+    predictive_score.append(temp_pred)
+
+  metric_results['predictive'] = np.mean(predictive_score)
+
   # 3. Visualization (PCA and tSNE)
   visualization(ori_data, generated_data, 'pca')
   visualization(ori_data, generated_data, 'tsne')
-  
+
   ## Print discriminative and predictive scores
   print(metric_results)
 
@@ -311,8 +302,8 @@ def main (args):
   """
 
 
-if __name__ == '__main__':  
-  
+if __name__ == '__main__':
+
   # Inputs for the main function
   parser = argparse.ArgumentParser()
   parser.add_argument(
@@ -359,8 +350,8 @@ if __name__ == '__main__':
       '--lr',
       default=1e-3,
       type=float)
-  
-  args = parser.parse_args() 
-  
-  # Calls main function  
+
+  args = parser.parse_args()
+
+  # Calls main function
   ori_data, generated_data, metrics = main(args)
