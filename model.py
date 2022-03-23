@@ -2,19 +2,19 @@ import torch
 from torch.nn import Module, GRU, Linear, Sigmoid
 
 class Generator(Module):
-    def __init__(self, z_dim, hidden_dim, num_layers):
+    def __init__(self, z_dim, hidden_size, num_layers):
         """Noise sequence -> Original space"""
         super().__init__()
         # tgan.py:129
         self.e_cell = GRU(
             input_size=z_dim, 
-            hidden_size=hidden_dim, 
+            hidden_size=hidden_size, 
             num_layers=num_layers, 
             batch_first=True
         )
         self.linear = Linear(
-            in_features=hidden_dim, 
-            out_features=hidden_dim
+            in_features=hidden_size, 
+            out_features=hidden_size
         )
         self.sigmoid = Sigmoid()
 
@@ -43,16 +43,16 @@ class Generator(Module):
 
 class Discriminator(Module):
     """Original space -> Logits"""
-    def __init__(self, hidden_dim, num_layers):
+    def __init__(self, hidden_size, num_layers):
         super().__init__()
-        self.e_cell = GRU(
-            input_size=hidden_dim, 
-            hidden_size=hidden_dim, 
+        self.rnn = GRU(
+            input_size=hidden_size, 
+            hidden_size=hidden_size, 
             num_layers=num_layers, 
             batch_first=True
         )
         self.linear = Linear(
-            in_features=hidden_dim, 
+            in_features=hidden_size, 
             out_features=1
         )
 
@@ -76,13 +76,13 @@ class Discriminator(Module):
 
 class Embedder(Module):
     """Original space -> Embedding space"""
-    def __init__(self, input_size, hidden_dim, num_layers):
+    def __init__(self, input_size, hidden_size, num_layers):
         super().__init__()
         self.rnn = GRU(input_size=input_size, 
-                       hidden_size=hidden_dim, 
+                       hidden_size=hidden_size, 
                        num_layers=num_layers, 
                        batch_first=True)
-        self.linear = Linear(in_features=hidden_dim, out_features=hidden_dim)
+        self.linear = Linear(in_features=hidden_size, out_features=hidden_size)
         self.sigmoid = Sigmoid()
 
     def forward(self, x, T):
@@ -105,14 +105,14 @@ class Embedder(Module):
 
 
 class Recovery(Module):
-    def __init__(self, hidden_dim, output_size, num_layers):
+    def __init__(self, hidden_size, output_size, num_layers):
         """Latent space -> Original space"""
         super().__init__()
-        self.rnn = GRU(input_size=hidden_dim, 
-                hidden_size=hidden_dim, 
+        self.rnn = GRU(input_size=hidden_size, 
+                hidden_size=hidden_size, 
                 num_layers=num_layers, 
                 batch_first=True)
-        self.linear = Linear(in_features=hidden_dim, out_features=output_size)
+        self.linear = Linear(in_features=hidden_size, out_features=output_size)
 
     def forward(self, x, T):
         H_packed = torch.nn.utils.rnn.pack_padded_sequence(
