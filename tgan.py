@@ -2,9 +2,9 @@ import numpy as np
 import torch
 from model import Embedder, Generator, Discriminator, Recovery, Supervisor
 from data_loading import real_data_loading, sine_data_generation
-from metrics.discriminative_metrics import discriminative_score_metrics
-from metrics.predictive_metrics import predictive_score_metrics
-from metrics.visualization_metrics import visualization
+#from metrics.discriminative_metrics import discriminative_score_metrics
+#from metrics.predictive_metrics import predictive_score_metrics
+#from metrics.visualization_metrics import visualization
 import argparse
 
 
@@ -42,12 +42,11 @@ def train(dataX, parameters):
         Normalization_Flag = 0
 
     # Network Parameters
-    hidden_dim   = parameters['hidden_dim']
+    hidden_size   = parameters['hidden_size']
     num_layers   = parameters['num_layers']
     iterations   = parameters['iterations']
     batch_size   = parameters['batch_size']
-    module_name  = parameters['module_name']    # 'lstm' or 'lstmLN'
-    z_dim        = parameters['z_dim']
+    z_dim        = data_dim
     gamma        = 1
     lr 			 = parameters['lr']
 
@@ -60,11 +59,11 @@ def train(dataX, parameters):
             Z_mb.append(Temp_Z)
         return Z_mb
 
-    embedder = Embedder(data_dim, hidden_dim, num_layers).cuda()
-    discriminator = Discriminator(hidden_dim, num_layers).cuda()
-    generator = Generator(z_dim, hidden_dim, num_layers).cuda()
-    recovery = Recovery(hidden_dim, data_dim, num_layers).cuda()
-    supervisor = Supervisor(data_dim, num_layers)
+    embedder = Embedder(data_dim, hidden_size, num_layers).cuda()
+    discriminator = Discriminator(hidden_size, num_layers).cuda()
+    generator = Generator(z_dim, hidden_size, num_layers).cuda()
+    recovery = Recovery(hidden_size, data_dim, num_layers).cuda()
+    supervisor = Supervisor(hidden_size, num_layers).cuda()
 
     e_opt = torch.optim.Adam(embedder.parameters(), lr)
     r_opt = torch.optim.Adam(recovery.parameters(), lr)
@@ -87,8 +86,8 @@ def train(dataX, parameters):
         idx = np.random.permutation(No)
         train_idx = idx[:batch_size]     
             
-        X = list(dataX[i] for i in train_idx)
-        T = list(dataT[i] for i in train_idx)
+        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
+        T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
 
         H = embedder(X, T)
         X_tilde = recovery(H, T)
@@ -109,7 +108,7 @@ def train(dataX, parameters):
         r_opt.step()
         
         if itt % 1000 == 0:
-            print('step: '+ str(itt) + ', e_loss: ' + str(np.round(np.sqrt(E_loss_T0),4)) )        
+            print('step: '+ str(itt) + ', e_loss: ' + str(E_loss_T0.item() ))        
             
     print('Finish Embedding Network Training')
     
@@ -125,16 +124,17 @@ def train(dataX, parameters):
         idx = np.random.permutation(No)
         train_idx = idx[:batch_size]     
             
-        X = list(dataX[i] for i in train_idx)
-        T = list(dataT[i] for i in train_idx)        
+        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
+        T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)    
         
-        H = embedder(X, T)     
+        H = embedder(X, T)  
+        H_hat_supervise = supervisor(H, T)   
         G_loss_S = torch.nn.MSELoss()(H[:,1:,:], H_hat_supervise[:,1:,:])
         G_loss_S.backward()
         s_opt.step()
                            
         if itt % 1000 == 0:
-            print('step: '+ str(itt) + ', s_loss: ' + str(np.round(np.sqrt(G_loss_S),4)) )
+            print('step: '+ str(itt) + ', s_loss: ' + str(np.round(np.sqrt(G_loss_S.item()),4)) )
                 
     print('Finish Training with Supervised Loss Only')
     
@@ -146,8 +146,8 @@ def train(dataX, parameters):
         idx = np.random.permutation(No)
         train_idx = idx[:batch_size]     
             
-        X = list(dataX[i] for i in train_idx)
-        T = list(dataT[i] for i in train_idx)   
+        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
+        T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
 
         # Generator Training
         for _ in range(2):
@@ -161,6 +161,7 @@ def train(dataX, parameters):
             H_hat_supervise = supervisor(H, T)
             X_tilde = recovery(H, T)
 
+            Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).cuda()
             E_hat = generator(Z, T)
             H_hat = supervisor(E_hat, T)
 
@@ -205,7 +206,7 @@ def train(dataX, parameters):
 
 
         # Random Generator
-        Z = torch.rand((batch_size, Max_Seq_Len, z_dim))
+        Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).cuda()
 
         H = embedder(X, T).detach()
         H_hat = supervisor(H, T).detach()
@@ -224,11 +225,19 @@ def train(dataX, parameters):
         
         D_loss.backward()
         d_opt.step()
+
+        if itt % 1000 == 0:
+            print('step: '+ str(itt) + '/' + str(iterations) + 
+                    ', d_loss: ' + str(np.round(D_loss.item())) + 
+                    ', g_loss_u: ' + str(np.round(G_loss.item())) + 
+                    ', g_loss_s: ' + str(np.round(np.sqrt(G_loss_S.item()),4)) + 
+                    ', g_loss_v: ' + str(np.round(G_loss_V.item())) + 
+                    ', e_loss_t0: ' + str(np.round(np.sqrt(E_loss_T0.item()),4))  )
    
     
     print('Finish Joint Training')
 
-    Z = torch.rand((batch_size, Max_Seq_Len, z_dim))
+    Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).cuda()
     E_hat = generator(Z, T)
     H_hat = supervisor(E_hat, T)
     generated_data_curr = recovery(H_hat, T)
@@ -261,8 +270,9 @@ def main (args):
   # Set newtork parameters
   parameters = dict()  
   parameters['module'] = args.module
-  parameters['hidden_dim'] = args.hidden_dim
-  parameters['num_layer'] = args.num_layer
+  parameters['lr'] = args.lr
+  parameters['hidden_size'] = args.hidden_size
+  parameters['num_layers'] = args.num_layers
   parameters['iterations'] = args.iteration
   parameters['batch_size'] = args.batch_size
       
@@ -273,6 +283,7 @@ def main (args):
   # Output initialization
   metric_results = dict()
   
+  """
   # 1. Discriminative Score
   discriminative_score = list()
   for _ in range(args.metric_iteration):
@@ -297,6 +308,7 @@ def main (args):
   print(metric_results)
 
   return ori_data, generated_data, metric_results
+  """
 
 
 if __name__ == '__main__':  
@@ -319,19 +331,19 @@ if __name__ == '__main__':
       default='gru',
       type=str)
   parser.add_argument(
-      '--hidden_dim',
+      '--hidden_size',
       help='hidden state dimensions (should be optimized)',
       default=24,
       type=int)
   parser.add_argument(
-      '--num_layer',
+      '--num_layers',
       help='number of layers (should be optimized)',
       default=3,
       type=int)
   parser.add_argument(
       '--iteration',
       help='Training iterations (should be optimized)',
-      default=50000,
+      default=1000,
       type=int)
   parser.add_argument(
       '--batch_size',
@@ -343,6 +355,10 @@ if __name__ == '__main__':
       help='iterations of the metric computation',
       default=10,
       type=int)
+  parser.add_argument(
+      '--lr',
+      default=1e-3,
+      type=float)
   
   args = parser.parse_args() 
   
