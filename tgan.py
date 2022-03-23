@@ -26,7 +26,7 @@ def train(dataX, parameters):
     # Normalization
     min_val = np.min(np.min(dataX, axis = 0), axis = 0)
     max_val = np.max(np.max(dataX, axis = 0), axis = 0)
-    if ((max_val > 1) | (min_val < 0)):
+    if ((np.max(max_val) > 1) | (np.min(min_val) < 0)):
         dataX = scale(dataX)
         Normalization_Flag = 1
     else:
@@ -99,7 +99,7 @@ def train(dataX, parameters):
         r_opt.step()
 
         if itt % 1000 == 0:
-            print('step: '+ str(itt) + ', e_loss: ' + str(E_loss_T0.item() ))
+            print('step: '+ str(itt) + ', e_loss: ' + str(round(E_loss0.item(), 8)))
 
     print('Finish Embedding Network Training')
 
@@ -219,11 +219,11 @@ def train(dataX, parameters):
 
         if itt % 1000 == 0:
             print('step: '+ str(itt) + '/' + str(iterations) +
-                    ', d_loss: ' + str(np.round(D_loss.item())) +
-                    ', g_loss_u: ' + str(np.round(G_loss.item())) +
-                    ', g_loss_s: ' + str(np.round(np.sqrt(G_loss_S.item()),4)) +
-                    ', g_loss_v: ' + str(np.round(G_loss_V.item())) +
-                    ', e_loss_t0: ' + str(np.round(np.sqrt(E_loss_T0.item()),4))  )
+                    ', d_loss: ' + str(np.round(D_loss.item(), 8)) +
+                    ', g_loss_u: ' + str(np.round(G_loss_U.item(), 8)) +
+                    ', g_loss_s: ' + str(np.round(np.sqrt(G_loss_S.item()), 8)) +
+                    ', g_loss_v: ' + str(np.round(G_loss_V.item(), 8)) +
+                    ', e_loss_t0: ' + str(np.round(np.sqrt(E_loss_T0.item()), 8)))
 
 
     print('Finish Joint Training')
@@ -236,12 +236,14 @@ def train(dataX, parameters):
     generated_data = list()
 
     for i in range(batch_size):
-        temp = generated_data_curr[i,:dataT[i],:]
+        temp = generated_data_curr[i,:dataT[i],:].cpu().detach().numpy()
         generated_data.append(temp)
 
+    print(len(generated_data), max_val.shape)
     # Renormalization
-    generated_data = generated_data * max_val
-    generated_data = generated_data + min_val
+    if Normalization_Flag:
+      generated_data = generated_data * max_val
+      generated_data = generated_data + min_val
 
     return generated_data
 
