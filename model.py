@@ -56,7 +56,7 @@ class Discriminator(Module):
             out_features=1
         )
 
-    def forward(self, x):
+    def forward(self, x, T):
         # [B x T x F] -> [B x T x 1]
         H_packed = torch.nn.utils.rnn.pack_padded_sequence(
             input=x, 
