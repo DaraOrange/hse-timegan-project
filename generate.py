@@ -1,15 +1,15 @@
 import numpy as np
 import torch
 from model import Embedder, Generator, Discriminator, Recovery, Supervisor
-from data_loading import real_data_loading, sine_data_generation, scaler
-#from metrics.discriminative_metrics import discriminative_score_metrics
-#from metrics.predictive_metrics import predictive_score_metrics
-#from metrics.visualization_metrics import visualization
+from data_loading import scale
+from metrics.discriminative_metrics import discriminative_score_metrics
+from metrics.predictive_metrics import predictive_score_metrics
+from metrics.visualization_metrics import visualization
 import argparse
 
 
 #%% Start TGAN function (Input: Original data, Output: Synthetic Data)
-def train(dataX, parameters):
+def generate(dataX, parameters):
 	# tf.reset_default_graph()  # https://discuss.pytorch.org/t/how-to-free-graph-manually/9255
 
 	# Basic Parameters
@@ -246,114 +246,3 @@ def train(dataX, parameters):
       generated_data = generated_data + min_val
 
     return generated_data
-
-
-def main (args):
-  ## Data loading
-  if args.data_name in ['stock', 'energy']:
-    ori_data = real_data_loading(args.data_name, args.seq_len)
-  elif args.data_name == 'sine':
-    # Set number of samples and its dimensions
-    no, dim = 10000, 5
-    ori_data = sine_data_generation(no, args.seq_len, dim)
-
-  print(args.data_name + ' dataset is ready.')
-
-  ## Synthetic data generation by TimeGAN
-  # Set newtork parameters
-  parameters = dict()
-  parameters['module'] = args.module
-  parameters['lr'] = args.lr
-  parameters['hidden_size'] = args.hidden_size
-  parameters['num_layers'] = args.num_layers
-  parameters['iterations'] = args.iteration
-  parameters['batch_size'] = args.batch_size
-
-  generated_data = train(ori_data, parameters)
-  print('Finish Synthetic Data Generation')
-
-  ## Performance metrics
-  # Output initialization
-  metric_results = dict()
-
-  """
-  # 1. Discriminative Score
-  discriminative_score = list()
-  for _ in range(args.metric_iteration):
-    temp_disc = discriminative_score_metrics(ori_data, generated_data)
-    discriminative_score.append(temp_disc)
-
-  metric_results['discriminative'] = np.mean(discriminative_score)
-
-  # 2. Predictive score
-  predictive_score = list()
-  for tt in range(args.metric_iteration):
-    temp_pred = predictive_score_metrics(ori_data, generated_data)
-    predictive_score.append(temp_pred)
-
-  metric_results['predictive'] = np.mean(predictive_score)
-
-  # 3. Visualization (PCA and tSNE)
-  visualization(ori_data, generated_data, 'pca')
-  visualization(ori_data, generated_data, 'tsne')
-
-  ## Print discriminative and predictive scores
-  print(metric_results)
-
-  return ori_data, generated_data, metric_results
-  """
-
-
-if __name__ == '__main__':
-
-  # Inputs for the main function
-  parser = argparse.ArgumentParser()
-  parser.add_argument(
-      '--data_name',
-      choices=['sine','stock','energy'],
-      default='stock',
-      type=str)
-  parser.add_argument(
-      '--seq_len',
-      help='sequence length',
-      default=24,
-      type=int)
-  parser.add_argument(
-      '--module',
-      choices=['gru','lstm','lstmLN'],
-      default='gru',
-      type=str)
-  parser.add_argument(
-      '--hidden_size',
-      help='hidden state dimensions (should be optimized)',
-      default=24,
-      type=int)
-  parser.add_argument(
-      '--num_layers',
-      help='number of layers (should be optimized)',
-      default=3,
-      type=int)
-  parser.add_argument(
-      '--iteration',
-      help='Training iterations (should be optimized)',
-      default=1000,
-      type=int)
-  parser.add_argument(
-      '--batch_size',
-      help='the number of samples in mini-batch (should be optimized)',
-      default=128,
-      type=int)
-  parser.add_argument(
-      '--metric_iteration',
-      help='iterations of the metric computation',
-      default=10,
-      type=int)
-  parser.add_argument(
-      '--lr',
-      default=1e-3,
-      type=float)
-
-  args = parser.parse_args()
-
-  # Calls main function
-  ori_data, generated_data, metrics = main(args)

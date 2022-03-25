@@ -1,0 +1,117 @@
+from generate import generate
+import argparse
+from data_loading import real_data_loading
+
+default_args = {
+    'data_name': 'stock',
+    'metric_iteration': 10,
+    'seq_len': 24,
+    'module': 'gru',
+    'lr': 1e-3,
+    'hidden_size': 24,
+    'num_layers': 3,
+    'iterations': 1,
+    'batch_size': 32
+}
+
+def main(args=default_args):
+  ## Data loading
+  ori_data = real_data_loading(args.data_name, args.seq_len)
+
+  print(args.data_name + ' dataset is ready.')
+
+  ## Synthetic data generation by TimeGAN
+  # Set newtork parameters
+  parameters = dict()
+  parameters['module'] = args.module
+  parameters['lr'] = args.lr
+  parameters['hidden_size'] = args.hidden_size
+  parameters['num_layers'] = args.num_layers
+  parameters['iterations'] = args.iteration
+  parameters['batch_size'] = args.batch_size
+
+  generated_data = generate(ori_data, parameters)
+  print('Finish Synthetic Data Generation')
+
+  ## Performance metrics
+  # Output initialization
+  metric_results = dict()
+
+  # 1. Discriminative Score
+  discriminative_score = list()
+  for _ in range(args.metric_iteration):
+    temp_disc = discriminative_score_metrics(ori_data, generated_data)
+    discriminative_score.append(temp_disc)
+
+  metric_results['discriminative'] = np.mean(discriminative_score)
+
+  # 2. Predictive score
+  predictive_score = list()
+  for tt in range(args.metric_iteration):
+    temp_pred = predictive_score_metrics(ori_data, generated_data)
+    predictive_score.append(temp_pred)
+
+  metric_results['predictive'] = np.mean(predictive_score)
+
+  # 3. Visualization (PCA and tSNE)
+  visualization(ori_data, generated_data, 'pca')
+  visualization(ori_data, generated_data, 'tsne')
+
+  ## Print discriminative and predictive scores
+  print(metric_results)
+
+  return ori_data, generated_data, metric_results
+
+if __name__ == '__main__':
+
+  # Inputs for the main function
+  parser = argparse.ArgumentParser()
+  parser.add_argument(
+      '--data_name',
+      choices=['yahoo','stock','energy'],
+      default='stock',
+      type=str)
+  parser.add_argument(
+      '--seq_len',
+      help='sequence length',
+      default=24,
+      type=int)
+  parser.add_argument(
+      '--module',
+      choices=['gru','lstm','lstmLN'],
+      default='gru',
+      type=str)
+  parser.add_argument(
+      '--hidden_size',
+      help='hidden state dimensions (should be optimized)',
+      default=24,
+      type=int)
+  parser.add_argument(
+      '--num_layers',
+      help='number of layers (should be optimized)',
+      default=3,
+      type=int)
+  parser.add_argument(
+      '--iteration',
+      help='Training iterations (should be optimized)',
+      default=1,
+      type=int)
+  parser.add_argument(
+      '--batch_size',
+      help='the number of samples in mini-batch (should be optimized)',
+      default=32,
+      type=int)
+  parser.add_argument(
+      '--metric_iteration',
+      help='iterations of the metric computation',
+      default=10,
+      type=int)
+  parser.add_argument(
+      '--lr',
+      default=1e-3,
+      type=float)
+
+  args = parser.parse_args()
+
+  # Calls main function
+  ori_data, generated_data, metrics = main(args=args)

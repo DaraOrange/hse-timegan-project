@@ -34,6 +34,8 @@ def real_data_loading (data_name, seq_len):
     ori_data = np.loadtxt('data/stock_data.csv', delimiter = ",",skiprows = 1)
   elif data_name == 'energy':
     ori_data = np.loadtxt('data/energy_data.csv', delimiter = ",",skiprows = 1)
+  elif data_name == 'yahoo':
+    ori_data = np.loadtxt('data/yahoo_stock.csv', delimiter = ",",skiprows = 1, usecols=(2, 3, 4, 5, 6, 7))
 
   # Flip the data to make chronological data
   ori_data = ori_data[::-1]
