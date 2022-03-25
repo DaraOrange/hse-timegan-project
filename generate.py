@@ -2,9 +2,6 @@ import numpy as np
 import torch
 from model import Embedder, Generator, Discriminator, Recovery, Supervisor
 from data_loading import scale
-from metrics.discriminative_metrics import discriminative_score_metrics
-from metrics.predictive_metrics import predictive_score_metrics
-from metrics.visualization_metrics import visualization
 import argparse
 
 
@@ -33,13 +30,14 @@ def generate(dataX, parameters):
         Normalization_Flag = 0
 
     # Network Parameters
-    hidden_size   = parameters['hidden_size']
+    hidden_size  = parameters['hidden_size']
     num_layers   = parameters['num_layers']
     iterations   = parameters['iterations']
     batch_size   = parameters['batch_size']
     z_dim        = data_dim
     gamma        = 1
     lr 			 = parameters['lr']
+    device       = parameters['device']
 
     def random_generator(batch_size, z_dim, T_mb, Max_Seq_Len):
         Z_mb = list()
@@ -50,11 +48,11 @@ def generate(dataX, parameters):
             Z_mb.append(Temp_Z)
         return Z_mb
 
-    embedder = Embedder(data_dim, hidden_size, num_layers).cuda()
-    discriminator = Discriminator(hidden_size, num_layers).cuda()
-    generator = Generator(z_dim, hidden_size, num_layers).cuda()
-    recovery = Recovery(hidden_size, data_dim, num_layers).cuda()
-    supervisor = Supervisor(hidden_size, num_layers).cuda()
+    embedder = Embedder(data_dim, hidden_size, num_layers).to(device)
+    discriminator = Discriminator(hidden_size, num_layers).to(device)
+    generator = Generator(z_dim, hidden_size, num_layers).to(device)
+    recovery = Recovery(hidden_size, data_dim, num_layers).to(device)
+    supervisor = Supervisor(hidden_size, num_layers).to(device)
 
     e_opt = torch.optim.Adam(embedder.parameters(), lr)
     r_opt = torch.optim.Adam(recovery.parameters(), lr)
@@ -77,7 +75,7 @@ def generate(dataX, parameters):
         idx = np.random.permutation(No)
         train_idx = idx[:batch_size]
 
-        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
+        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).to(device)
         T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
 
         H = embedder(X, T)
@@ -115,7 +113,7 @@ def generate(dataX, parameters):
         idx = np.random.permutation(No)
         train_idx = idx[:batch_size]
 
-        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
+        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).to(device)
         T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
 
         H = embedder(X, T)
@@ -137,7 +135,7 @@ def generate(dataX, parameters):
         idx = np.random.permutation(No)
         train_idx = idx[:batch_size]
 
-        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).cuda()
+        X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).to(device)
         T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
 
         # Generator Training
@@ -152,7 +150,7 @@ def generate(dataX, parameters):
             H_hat_supervise = supervisor(H, T)
             X_tilde = recovery(H, T)
 
-            Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).cuda()
+            Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).to(device)
             E_hat = generator(Z, T)
             H_hat = supervisor(E_hat, T)
 
@@ -197,7 +195,7 @@ def generate(dataX, parameters):
 
 
         # Random Generator
-        Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).cuda()
+        Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).to(device)
 
         H = embedder(X, T).detach()
         H_hat = supervisor(H, T).detach()
@@ -228,7 +226,7 @@ def generate(dataX, parameters):
 
     print('Finish Joint Training')
 
-    Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).cuda()
+    Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).to(device)
     E_hat = generator(Z, T)
     H_hat = supervisor(E_hat, T)
     generated_data_curr = recovery(H_hat, T)
@@ -239,7 +237,6 @@ def generate(dataX, parameters):
         temp = generated_data_curr[i,:dataT[i],:].cpu().detach().numpy()
         generated_data.append(temp)
 
-    print(len(generated_data), max_val.shape)
     # Renormalization
     if Normalization_Flag:
       generated_data = generated_data * max_val

@@ -1,6 +1,10 @@
 from generate import generate
+import numpy as np
 import argparse
 from data_loading import real_data_loading
+from metrics.discriminative_metrics import discriminative_score_metrics
+from metrics.predictive_metrics import predictive_score_metrics
+from metrics.visualization_metrics import visualization
 
 default_args = {
     'data_name': 'stock',
@@ -11,7 +15,8 @@ default_args = {
     'hidden_size': 24,
     'num_layers': 3,
     'iterations': 1,
-    'batch_size': 32
+    'batch_size': 32,
+    'device': 'cpu'
 }
 
 def main(args=default_args):
@@ -29,6 +34,7 @@ def main(args=default_args):
   parameters['num_layers'] = args.num_layers
   parameters['iterations'] = args.iteration
   parameters['batch_size'] = args.batch_size
+  parameters['device'] = args.device
 
   generated_data = generate(ori_data, parameters)
   print('Finish Synthetic Data Generation')
@@ -40,7 +46,7 @@ def main(args=default_args):
   # 1. Discriminative Score
   discriminative_score = list()
   for _ in range(args.metric_iteration):
-    temp_disc = discriminative_score_metrics(ori_data, generated_data)
+    temp_disc = discriminative_score_metrics(ori_data, generated_data, parameters['device'])
     discriminative_score.append(temp_disc)
 
   metric_results['discriminative'] = np.mean(discriminative_score)
@@ -48,7 +54,7 @@ def main(args=default_args):
   # 2. Predictive score
   predictive_score = list()
   for tt in range(args.metric_iteration):
-    temp_pred = predictive_score_metrics(ori_data, generated_data)
+    temp_pred = predictive_score_metrics(ori_data, generated_data, parameters['device'])
     predictive_score.append(temp_pred)
 
   metric_results['predictive'] = np.mean(predictive_score)
@@ -110,6 +116,10 @@ if __name__ == '__main__':
       '--lr',
       default=1e-3,
       type=float)
+  parser.add_argument(
+      '--device',
+      default='cpu',
+      type=str)
 
   args = parser.parse_args()
 
