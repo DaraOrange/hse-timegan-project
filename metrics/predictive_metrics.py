@@ -8,7 +8,7 @@ from torch import nn
 class Predictor(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super().__init__()
-        self.p_cell = nn.GRU(input_size=input_dim-1, hidden_size=hidden_dim)
+        self.p_cell = nn.GRU(input_size=input_dim, hidden_size=hidden_dim, batch_first=True)
         self.tanh = nn.Tanh()
         self.linear = nn.Linear(hidden_dim, 1)
         self.sigmoid = nn.Sigmoid()
@@ -22,7 +22,8 @@ class Predictor(nn.Module):
             enforce_sorted=False
         )
         x_packed = x_packed.float()
-        _, p_last_state = self.tanh(self.p_cell(x_packed)[1])
+        _, p_last_state = self.p_cell(x_packed)
+        p_last_state = self.tanh(p_last_state)
         y_hat_logit = self.linear(p_last_state)
         y_hat = self.sigmoid(y_hat_logit)
         return y_hat
