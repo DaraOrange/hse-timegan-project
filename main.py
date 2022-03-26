@@ -59,7 +59,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument(
       '--exp_name',
-      default='my-exp',
+      default='stock_init',
       type=str)
   parser.add_argument(
       '--data_name',
