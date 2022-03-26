@@ -3,8 +3,14 @@ import torch
 from model import Embedder, Generator, Discriminator, Recovery, Supervisor
 from data_loading import scale
 import argparse
+import wandb
 
 def generate(dataX, parameters):
+    os.environ["WANDB_API_KEY"] = "fb8e2b4baa2d663fead9edbdd132da5080eeb6ee"
+    os.environ["WANDB_MODE"] = "online"
+
+    wandb.init(project="TimeGAN")
+
     No = len(dataX)
     data_dim = len(dataX[0][0,:])
 
@@ -82,6 +88,7 @@ def generate(dataX, parameters):
         e_opt.step()
         r_opt.step()
 
+        wandb.log({'Embedder loss': np.sqrt(step_e_loss)})
         if itt % 1000 == 0:
             print('step: '+ str(itt) + ', e_loss: ' + str(round(E_loss0.item(), 8)))
 
@@ -108,6 +115,7 @@ def generate(dataX, parameters):
         G_loss_S.backward()
         s_opt.step()
 
+        wandb.log({'Supervisor loss': np.sqrt(np.sqrt(step_g_loss_s))})
         if itt % 1000 == 0:
             print('step: '+ str(itt) + ', s_loss: ' + str(np.round(np.sqrt(G_loss_S.item()),4)) )
 
@@ -140,13 +148,13 @@ def generate(dataX, parameters):
 
             X_hat = recovery(H_hat, T)
 
-            Y_fake = discriminator(H_hat, T)    
+            Y_fake = discriminator(H_hat, T)
             Y_fake_e = discriminator(E_hat, T)
 
             G_loss_U = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake, torch.ones_like(Y_fake))
             G_loss_U_e = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake_e, torch.ones_like(Y_fake_e))
 
-            G_loss_S = torch.nn.functional.mse_loss(H_hat_supervise[:,:-1,:], H[:,1:,:]) 
+            G_loss_S = torch.nn.functional.mse_loss(H_hat_supervise[:,:-1,:], H[:,1:,:])
 
             G_loss_V1 = torch.mean(torch.abs(torch.sqrt(X_hat.var(dim=0, unbiased=False) + 1e-6) - torch.sqrt(X.var(dim=0, unbiased=False) + 1e-6)))
             G_loss_V2 = torch.mean(torch.abs((X_hat.mean(dim=0)) - (X.mean(dim=0))))
@@ -167,7 +175,7 @@ def generate(dataX, parameters):
             G_loss_S = torch.nn.functional.mse_loss(
                 H_hat_supervise[:,:-1,:],
                 H[:,1:,:]
-            ) 
+            )
 
             E_loss_T0 = torch.nn.functional.mse_loss(X_tilde, X)
             E_loss0 = 10 * torch.sqrt(E_loss_T0)
@@ -184,9 +192,9 @@ def generate(dataX, parameters):
         H_hat = supervisor(H, T).detach()
         E_hat = generator(Z, T).detach()
 
-        Y_real = discriminator(H, T)         
-        Y_fake = discriminator(H_hat, T)    
-        Y_fake_e = discriminator(E_hat, T)  
+        Y_real = discriminator(H, T)
+        Y_fake = discriminator(H_hat, T)
+        Y_fake_e = discriminator(E_hat, T)
 
         D_loss_real = torch.nn.functional.binary_cross_entropy_with_logits(Y_real, torch.ones_like(Y_real))
         D_loss_fake = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake, torch.zeros_like(Y_fake))
@@ -196,6 +204,12 @@ def generate(dataX, parameters):
 
         D_loss.backward()
         d_opt.step()
+
+        wandb.log({'Disc loss': step_d_loss,
+               'G_loss_u': step_g_loss_u,
+               'g_loss_s': np.sqrt(step_g_loss_s),
+               'g_loss_v': step_g_loss_v,
+               'e_loss_t0': np.sqrt(step_e_loss_t0)})
 
         if itt % 1000 == 0:
             print('step: '+ str(itt) + '/' + str(iterations) +
