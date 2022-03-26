@@ -9,13 +9,13 @@ def scale(data):
 
 
 def data_loading(data_name, seq_len):
-  assert data_name in ['stock','energy']
+  assert data_name in ['stock','energy','yahoo_stock']
 
   if data_name == 'stock':
     ori_data = np.loadtxt('data/stock_data.csv', delimiter = ",",skiprows = 1)
   elif data_name == 'energy':
     ori_data = np.loadtxt('data/energy_data.csv', delimiter = ",",skiprows = 1)
-  elif data_name == 'yahoo':
+  elif data_name == 'yahoo_stock':
     ori_data = np.loadtxt('data/yahoo_stock.csv', delimiter = ",",skiprows = 1, usecols=(2, 3, 4, 5, 6, 7))
 
   # Flip the data to make chronological data
