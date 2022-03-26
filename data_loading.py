@@ -8,7 +8,7 @@ def scale(data):
   return norm_data
 
 
-def real_data_loading (data_name, seq_len):
+def data_loading(data_name, seq_len):
   assert data_name in ['stock','energy']
 
   if data_name == 'stock':

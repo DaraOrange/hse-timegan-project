@@ -1,32 +1,28 @@
-from generate import generate
-import numpy as np
 import argparse
-from data_loading import real_data_loading
+import numpy as np
+from generate import generate
+from data_loading import data_loading
 from metrics.discriminative_metrics import discriminative_score_metrics
 from metrics.predictive_metrics import predictive_score_metrics
-from metrics.visualization_metrics import visualization
 
 default_args = {
     'data_name': 'stock',
-    'metric_iteration': 10,
+    'metric_iteration': 1,
     'seq_len': 24,
     'module': 'gru',
     'lr': 1e-3,
     'hidden_size': 24,
     'num_layers': 3,
-    'iterations': 1,
+    'iterations': 50000,
     'batch_size': 32,
     'device': 'cpu'
 }
 
 def main(args=default_args):
-  ## Data loading
-  ori_data = real_data_loading(args.data_name, args.seq_len)
+  ori_data = data_loading(args.data_name, args.seq_len)
 
   print(args.data_name + ' dataset is ready.')
 
-  ## Synthetic data generation by TimeGAN
-  # Set newtork parameters
   parameters = dict()
   parameters['module'] = args.module
   parameters['lr'] = args.lr
@@ -39,11 +35,8 @@ def main(args=default_args):
   generated_data = generate(ori_data, parameters)
   print('Finish Synthetic Data Generation')
 
-  ## Performance metrics
-  # Output initialization
   metric_results = dict()
 
-  # 1. Discriminative Score
   discriminative_score = list()
   for _ in range(args.metric_iteration):
     temp_disc = discriminative_score_metrics(ori_data, generated_data, parameters['device'])
@@ -51,7 +44,6 @@ def main(args=default_args):
 
   metric_results['discriminative'] = np.mean(discriminative_score)
 
-  # 2. Predictive score
   predictive_score = list()
   for tt in range(args.metric_iteration):
     temp_pred = predictive_score_metrics(ori_data, generated_data, parameters['device'])
@@ -59,19 +51,16 @@ def main(args=default_args):
 
   metric_results['predictive'] = np.mean(predictive_score)
 
-  # 3. Visualization (PCA and tSNE)
-  visualization(ori_data, generated_data, 'pca')
-  visualization(ori_data, generated_data, 'tsne')
-
-  ## Print discriminative and predictive scores
   print(metric_results)
 
   return ori_data, generated_data, metric_results
 
 if __name__ == '__main__':
-
-  # Inputs for the main function
   parser = argparse.ArgumentParser()
+  parser.add_argument(
+      '--exp_name',
+      default='my-exp',
+      type=str)
   parser.add_argument(
       '--data_name',
       choices=['yahoo','stock','energy'],
@@ -123,5 +112,6 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
-  # Calls main function
   ori_data, generated_data, metrics = main(args=args)
+  np.save(f'experiments/{args.exp_name}_gen.npy', generated_data)
+  np.save(f'experiments/{args.exp_name}_ori.npy', ori_data)

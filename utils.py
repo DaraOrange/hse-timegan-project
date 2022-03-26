@@ -46,6 +46,12 @@ def rnn_cell(module_name, hidden_dim, input_size):
   return rnn_cell
 
 
+def transformer_layer(d_model, nhead):
+  assert d_model % nhead == 0
+  encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, batch_first=True)
+  return encoder_layer
+
+
 def random_generator (batch_size, z_dim, T_mb, max_seq_len):
   Z_mb = list()
   for i in range(batch_size):

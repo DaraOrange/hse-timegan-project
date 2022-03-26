@@ -5,11 +5,9 @@ import numpy as np
 
    
 def visualization (ori_data, generated_data, analysis):
-    # Analysis sample size (for faster computation)
     anal_sample_no = min([1000, len(ori_data)])
     idx = np.random.permutation(len(ori_data))[:anal_sample_no]
         
-    # Data preprocessing
     ori_data = np.asarray(ori_data)
     generated_data = np.asarray(generated_data)  
     
@@ -27,18 +25,15 @@ def visualization (ori_data, generated_data, analysis):
                                         np.reshape(np.mean(ori_data[i,:,:],1), [1,seq_len])))
             prep_data_hat = np.concatenate((prep_data_hat, 
                                             np.reshape(np.mean(generated_data[i,:,:],1), [1,seq_len])))
-        
-    # Visualization parameter        
+             
     colors = ["red" for i in range(anal_sample_no)] + ["blue" for i in range(anal_sample_no)]    
         
     if analysis == 'pca':
-        # PCA Analysis
         pca = PCA(n_components = 2)
         pca.fit(prep_data)
         pca_results = pca.transform(prep_data)
         pca_hat_results = pca.transform(prep_data_hat)
         
-        # Plotting
         f, ax = plt.subplots(1)    
         plt.scatter(pca_results[:,0], pca_results[:,1],
                     c = colors[:anal_sample_no], alpha = 0.2, label = "Original")
@@ -51,16 +46,12 @@ def visualization (ori_data, generated_data, analysis):
         plt.ylabel('y_pca')
         plt.show()
         
-    elif analysis == 'tsne':
-        
-        # Do t-SNE Analysis together       
+    elif analysis == 'tsne':    
         prep_data_final = np.concatenate((prep_data, prep_data_hat), axis = 0)
         
-        # TSNE anlaysis
         tsne = TSNE(n_components = 2, verbose = 1, perplexity = 40, n_iter = 300)
         tsne_results = tsne.fit_transform(prep_data_final)
         
-        # Plotting
         f, ax = plt.subplots(1)
         
         plt.scatter(tsne_results[:anal_sample_no,0], tsne_results[:anal_sample_no,1], 

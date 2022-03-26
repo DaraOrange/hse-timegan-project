@@ -8,7 +8,7 @@ from torch import nn
 class Predictor(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super().__init__()
-        self.p_cell = nn.GRU(input_size=input_dim, hidden_size=hidden_dim, batch_first=True)
+        self.p_cell = nn.GRU(input_size=input_dim-1, hidden_size=hidden_dim, batch_first=True)
         self.tanh = nn.Tanh()
         self.linear = nn.Linear(hidden_dim, 1)
         self.sigmoid = nn.Sigmoid()
@@ -22,8 +22,12 @@ class Predictor(nn.Module):
             enforce_sorted=False
         )
         x_packed = x_packed.float()
-        _, p_last_state = self.p_cell(x_packed)
-        p_last_state = self.tanh(p_last_state)
+        H_o, _ = self.p_cell(x_packed)
+        H_o, T = torch.nn.utils.rnn.pad_packed_sequence(
+            sequence=H_o, 
+            batch_first=True,
+        )
+        p_last_state = self.tanh(H_o)
         y_hat_logit = self.linear(p_last_state)
         y_hat = self.sigmoid(y_hat_logit)
         return y_hat
@@ -51,9 +55,11 @@ def predictive_score_metrics (ori_data, generated_data, device):
 
         X_mb = list(generated_data[i][:-1,:(dim-1)] for i in train_idx)
         T_mb = list(generated_time[i]-1 for i in train_idx)
-        Y_mb = list(np.reshape(generated_data[i][1:,(dim-1)],[len(generated_data[i][1:,(dim-1)]),1]) for i in train_idx)
+        Y_mb = list(np.reshape(generated_data[i][1:,(dim-1)],
+                            [len(generated_data[i][1:,(dim-1)]),1]) for i in train_idx)
 
         y_pred = predictor(X_mb, T_mb)
+        Y_mb = torch.stack([torch.tensor(y) for y in Y_mb]).to(device)
 
         p_loss = nn.L1Loss()(Y_mb, y_pred)
         p_loss.backward()
@@ -68,12 +74,12 @@ def predictive_score_metrics (ori_data, generated_data, device):
     T_mb = list(ori_time[i]-1 for i in train_idx)
     Y_mb = list(np.reshape(ori_data[i][1:,(dim-1)], [len(ori_data[i][1:,(dim-1)]),1]) for i in train_idx)
 
-    pred_Y_curr = predictor(X_mb, T_mb)
+    pred_Y_curr = predictor(X_mb, T_mb).detach().cpu().numpy()
 
-    MAE_temp = 0
+    loss = 0
     for i in range(no):
-      MAE_temp = MAE_temp + mean_absolute_error(Y_mb[i], pred_Y_curr[i,:,:])
+      loss += mean_absolute_error(Y_mb[i], pred_Y_curr[i,:,:])
 
-    predictive_score = MAE_temp / no
+    predictive_score = loss / no
 
     return predictive_score

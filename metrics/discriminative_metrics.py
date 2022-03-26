@@ -40,7 +40,7 @@ def disc_loss(discriminator, X, T, X_hat, T_hat):
     return d_loss, y_pred_real, y_pred_fake
 
 
-def discriminative_score_metrics (ori_data, generated_data, device):
+def discriminative_score_metrics(ori_data, generated_data, device):
     no, seq_len, dim = np.asarray(ori_data).shape
     ori_time, ori_max_seq_len = extract_time(ori_data)
     generated_time, generated_max_seq_len = extract_time(ori_data)

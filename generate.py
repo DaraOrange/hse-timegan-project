@@ -4,23 +4,16 @@ from model import Embedder, Generator, Discriminator, Recovery, Supervisor
 from data_loading import scale
 import argparse
 
-
-#%% Start TGAN function (Input: Original data, Output: Synthetic Data)
 def generate(dataX, parameters):
-	# tf.reset_default_graph()  # https://discuss.pytorch.org/t/how-to-free-graph-manually/9255
-
-	# Basic Parameters
     No = len(dataX)
     data_dim = len(dataX[0][0,:])
 
-    # Maximum seq length and each seq length
     dataT = list()
     Max_Seq_Len = 0
     for i in range(No):
         Max_Seq_Len = max(Max_Seq_Len, len(dataX[i][:,0]))
         dataT.append(len(dataX[i][:,0]))
 
-    # Normalization
     min_val = np.min(np.min(dataX, axis = 0), axis = 0)
     max_val = np.max(np.max(dataX, axis = 0), axis = 0)
     if ((np.max(max_val) > 1) | (np.min(min_val) < 0)):
@@ -29,7 +22,6 @@ def generate(dataX, parameters):
     else:
         Normalization_Flag = 0
 
-    # Network Parameters
     hidden_size  = parameters['hidden_size']
     num_layers   = parameters['num_layers']
     iterations   = parameters['iterations']
@@ -60,8 +52,6 @@ def generate(dataX, parameters):
     g_opt = torch.optim.Adam(generator.parameters(), lr)
     d_opt = torch.optim.Adam(discriminator.parameters(), lr)
 
-    #%% Embedding Learning
-
     print('Start Embedding Network Training')
 
     for itt in range(iterations):
@@ -71,7 +61,6 @@ def generate(dataX, parameters):
         g_opt.zero_grad()
         d_opt.zero_grad()
 
-        # Batch setting
         idx = np.random.permutation(No)
         train_idx = idx[:batch_size]
 
@@ -81,10 +70,8 @@ def generate(dataX, parameters):
         H = embedder(X, T)
         X_tilde = recovery(H, T)
 
-        # Generator
         H_hat_supervise = supervisor(H, T)
 
-        # Train embedder
         G_loss_S = torch.nn.MSELoss()(H[:,1:,:], H_hat_supervise[:,1:,:])
         E_loss_T0 = torch.nn.MSELoss()(X, X_tilde)
         E_loss0 = 10*torch.sqrt(E_loss_T0)
@@ -92,7 +79,6 @@ def generate(dataX, parameters):
 
         E_loss0.backward()
 
-        # Update model parameters
         e_opt.step()
         r_opt.step()
 
@@ -129,7 +115,6 @@ def generate(dataX, parameters):
 
     print('Start Joint Training')
 
-    # Training step
     for itt in range(iterations):
 
         idx = np.random.permutation(No)
@@ -138,7 +123,6 @@ def generate(dataX, parameters):
         X = torch.tensor(np.array(list(dataX[i] for i in train_idx)), dtype=torch.float).to(device)
         T = torch.tensor(np.array(list(dataT[i] for i in train_idx)), dtype=torch.int64)
 
-        # Generator Training
         for _ in range(2):
             e_opt.zero_grad()
             r_opt.zero_grad()
@@ -156,13 +140,13 @@ def generate(dataX, parameters):
 
             X_hat = recovery(H_hat, T)
 
-            Y_fake = discriminator(H_hat, T)        # Output of supervisor
-            Y_fake_e = discriminator(E_hat, T)      # Output of generator
+            Y_fake = discriminator(H_hat, T)    
+            Y_fake_e = discriminator(E_hat, T)
 
             G_loss_U = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake, torch.ones_like(Y_fake))
             G_loss_U_e = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake_e, torch.ones_like(Y_fake_e))
 
-            G_loss_S = torch.nn.functional.mse_loss(H_hat_supervise[:,:-1,:], H[:,1:,:])        # Teacher forcing next output
+            G_loss_S = torch.nn.functional.mse_loss(H_hat_supervise[:,:-1,:], H[:,1:,:]) 
 
             G_loss_V1 = torch.mean(torch.abs(torch.sqrt(X_hat.var(dim=0, unbiased=False) + 1e-6) - torch.sqrt(X.var(dim=0, unbiased=False) + 1e-6)))
             G_loss_V2 = torch.mean(torch.abs((X_hat.mean(dim=0)) - (X.mean(dim=0))))
@@ -183,7 +167,7 @@ def generate(dataX, parameters):
             G_loss_S = torch.nn.functional.mse_loss(
                 H_hat_supervise[:,:-1,:],
                 H[:,1:,:]
-            ) # Teacher forcing next output
+            ) 
 
             E_loss_T0 = torch.nn.functional.mse_loss(X_tilde, X)
             E_loss0 = 10 * torch.sqrt(E_loss_T0)
@@ -194,17 +178,15 @@ def generate(dataX, parameters):
             r_opt.step()
 
 
-        # Random Generator
         Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).to(device)
 
         H = embedder(X, T).detach()
         H_hat = supervisor(H, T).detach()
         E_hat = generator(Z, T).detach()
 
-        # Forward Pass
-        Y_real = discriminator(H, T)            # Encoded original data
-        Y_fake = discriminator(H_hat, T)        # Output of supervisor
-        Y_fake_e = discriminator(E_hat, T)      # Output of generator
+        Y_real = discriminator(H, T)         
+        Y_fake = discriminator(H_hat, T)    
+        Y_fake_e = discriminator(E_hat, T)  
 
         D_loss_real = torch.nn.functional.binary_cross_entropy_with_logits(Y_real, torch.ones_like(Y_real))
         D_loss_fake = torch.nn.functional.binary_cross_entropy_with_logits(Y_fake, torch.zeros_like(Y_fake))
@@ -237,7 +219,6 @@ def generate(dataX, parameters):
         temp = generated_data_curr[i,:dataT[i],:].cpu().detach().numpy()
         generated_data.append(temp)
 
-    # Renormalization
     if Normalization_Flag:
       generated_data = generated_data * max_val
       generated_data = generated_data + min_val
