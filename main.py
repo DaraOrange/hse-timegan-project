@@ -15,7 +15,7 @@ default_args = {
     'num_layers': 3,
     'iterations': 50000,
     'batch_size': 32,
-    'device': 'gpu'
+    'device': 'cpu'
 }
 
 def main(args=default_args):
