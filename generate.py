@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import os
 from model import Embedder, Generator, Discriminator, Recovery, Supervisor
 from data_loading import scale
 import argparse
@@ -88,7 +89,7 @@ def generate(dataX, parameters):
         e_opt.step()
         r_opt.step()
 
-        wandb.log({'Embedder loss': np.sqrt(step_e_loss)})
+        wandb.log({'Embedder loss': round(E_loss0.item(), 8)})
         if itt % 1000 == 0:
             print('step: '+ str(itt) + ', e_loss: ' + str(round(E_loss0.item(), 8)))
 
@@ -115,7 +116,7 @@ def generate(dataX, parameters):
         G_loss_S.backward()
         s_opt.step()
 
-        wandb.log({'Supervisor loss': np.sqrt(np.sqrt(step_g_loss_s))})
+        wandb.log({'Supervisor loss': np.round(np.sqrt(G_loss_S.item()),4)})
         if itt % 1000 == 0:
             print('step: '+ str(itt) + ', s_loss: ' + str(np.round(np.sqrt(G_loss_S.item()),4)) )
 
@@ -205,11 +206,11 @@ def generate(dataX, parameters):
         D_loss.backward()
         d_opt.step()
 
-        wandb.log({'Disc loss': step_d_loss,
-               'G_loss_u': step_g_loss_u,
-               'g_loss_s': np.sqrt(step_g_loss_s),
-               'g_loss_v': step_g_loss_v,
-               'e_loss_t0': np.sqrt(step_e_loss_t0)})
+        wandb.log({'Disc loss': np.round(D_loss.item(), 8),
+               'G_loss_u': np.round(G_loss_U.item(), 8),
+               'g_loss_s': np.round(np.sqrt(G_loss_S.item()), 8),
+               'g_loss_v': np.round(G_loss_V.item(), 8),
+               'e_loss_t0': np.round(np.sqrt(E_loss_T0.item()), 8)})
 
         if itt % 1000 == 0:
             print('step: '+ str(itt) + '/' + str(iterations) +
