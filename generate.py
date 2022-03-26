@@ -223,14 +223,14 @@ def generate(dataX, parameters):
 
     print('Finish Joint Training')
 
-    Z = torch.rand((batch_size, Max_Seq_Len, z_dim)).to(device)
-    E_hat = generator(Z, T)
-    H_hat = supervisor(E_hat, T)
-    generated_data_curr = recovery(H_hat, T)
+    Z = torch.rand((No, Max_Seq_Len, z_dim)).to(device)
+    E_hat = generator(Z, dataT)
+    H_hat = supervisor(E_hat, dataT)
+    generated_data_curr = recovery(H_hat, dataT)
 
     generated_data = list()
 
-    for i in range(batch_size):
+    for i in range(No):
         temp = generated_data_curr[i,:dataT[i],:].cpu().detach().numpy()
         generated_data.append(temp)
 

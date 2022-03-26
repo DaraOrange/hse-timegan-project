@@ -89,7 +89,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--iteration',
       help='Training iterations (should be optimized)',
-      default=1,
+      default=50000,
       type=int)
   parser.add_argument(
       '--batch_size',
@@ -113,5 +113,5 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   ori_data, generated_data, metrics = main(args=args)
-  np.save(f'experiments/{args.exp_name}_gen.npy', generated_data)
-  np.save(f'experiments/{args.exp_name}_ori.npy', ori_data)
+  np.save(f'{args.exp_name}_gen.npy', generated_data)
+  np.save(f'{args.exp_name}_ori.npy', ori_data)
